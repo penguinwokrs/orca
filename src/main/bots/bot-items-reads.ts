@@ -1,6 +1,7 @@
 // Item reads beyond one row: a bot's list with exact counts, links by what they point at, and the rows
 // item views need in one round trip.
 import {
+  type BotItemOrigin,
   botItemEventId,
   isOpenBotItemStatus,
   type BotItemLinkKind,
@@ -10,8 +11,11 @@ import {
   eventRecordOf,
   integer,
   itemRecordOf,
+  json,
   linkRecordOf,
   optionalInteger,
+  originOf,
+  fromItemOf,
   statusOf,
   text
 } from './bot-items-rows'
@@ -25,6 +29,8 @@ export type BotItemListQuery = {
   chatIds?: readonly string[]
   /** Only items linking this: `item list --link`. */
   link?: { kind: BotItemLinkKind; ref: string }
+  /** Only items whose `made` event records this request: `item list --root-key`. */
+  rootKey?: string
   /** Only these items; the counts stay the whole scope's. */
   uids?: readonly string[]
   limit: number
@@ -63,11 +69,18 @@ export class BotItemsReads extends BotItemsTables {
     const link = query.link
       ? ' AND uid IN (SELECT item_uid FROM item_links WHERE kind = ? AND ref = ?)'
       : ''
-    const scope = `owner_bot_id = ?${chat}${link}`
+    // The first event is the `made` one; the item's own events index finds it.
+    const root =
+      query.rootKey !== undefined
+        ? ` AND (SELECT json_extract(data, '$.origin.rootKey') FROM item_events
+             WHERE item_uid = items.uid ORDER BY id LIMIT 1) = ?`
+        : ''
+    const scope = `owner_bot_id = ?${chat}${link}${root}`
     const scopeArgs = [
       query.botId,
       ...(query.chatIds ? [JSON.stringify(query.chatIds)] : []),
-      ...(query.link ? [query.link.kind, query.link.ref] : [])
+      ...(query.link ? [query.link.kind, query.link.ref] : []),
+      ...(query.rootKey !== undefined ? [query.rootKey] : [])
     ]
     const counts: Partial<Record<BotItemStatus, number>> = {}
     for (const row of this.db
@@ -113,8 +126,8 @@ export class BotItemsReads extends BotItemsTables {
       }))
   }
 
-  /** What item views need, for many items in one round trip: rows, links, Needs you questions, waits
-   *  and the newest event anyone but the owner made. */
+  /** What item views need, for many items in one round trip: rows, links, Needs you questions, waits,
+   *  origins and the newest event anyone but the owner made. */
   viewRows(
     uids: readonly string[],
     /** Also each open item's waiting ask, which reads its events: for its own view only. */
@@ -127,6 +140,10 @@ export class BotItemsReads extends BotItemsTables {
     waits: Record<string, BotItemEventRecord>
     othersLast: Record<string, number>
     waitingAsks: Record<string, string>
+    /** The request each item's `made` event records; none for items made before it was. */
+    origins: Record<string, BotItemOrigin>
+    /** The item each one's `made` event names it was made from (`add --from-item`). */
+    fromItems: Record<string, { uid: string; number: number }>
   } {
     const ids = JSON.stringify(uids)
     const rows = this.db
@@ -164,6 +181,25 @@ export class BotItemsReads extends BotItemsTables {
       const event = eventRecordOf(row)
       ;(questionIds.has(event.id) ? questions : waits)[event.itemUid] = event
     }
+    const origins: Record<string, BotItemOrigin> = {}
+    const fromItems: Record<string, { uid: string; number: number }> = {}
+    for (const row of this.db
+      .prepare(
+        `SELECT item_uid, json_extract(data, '$.origin') AS origin,
+           json_extract(data, '$.fromItem') AS from_item FROM item_events
+          WHERE id IN (SELECT MIN(id) FROM item_events
+            WHERE item_uid IN (SELECT value FROM json_each(?)) GROUP BY item_uid)`
+      )
+      .all(ids)) {
+      const origin = originOf(json(row, 'origin'))
+      const fromItem = fromItemOf(json(row, 'from_item'))
+      if (origin) {
+        origins[text(row, 'item_uid')] = origin
+      }
+      if (fromItem) {
+        fromItems[text(row, 'item_uid')] = fromItem
+      }
+    }
     const waitingAsks: Record<string, string> = {}
     for (const item of withWaitingAsks ? items : []) {
       const ask = isOpenBotItemStatus(item.status) ? this.waitingAsk(item) : null
@@ -171,6 +207,6 @@ export class BotItemsReads extends BotItemsTables {
         waitingAsks[item.uid] = botItemEventId(ask)
       }
     }
-    return { items, links, questions, waits, othersLast, waitingAsks }
+    return { items, links, questions, waits, othersLast, waitingAsks, origins, fromItems }
   }
 }

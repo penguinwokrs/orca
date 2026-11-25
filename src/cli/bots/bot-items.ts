@@ -90,7 +90,8 @@ export const BOT_ITEM_HANDLERS: Record<string, CommandHandler> = {
       ...(status ? { status: statusFlag(status) } : {}),
       ...(links.length > 0 ? { links } : {}),
       ...optional('forBot', getOptionalStringFlag(flags, 'for')),
-      ...optional('chat', getOptionalStringFlag(flags, 'chat'))
+      ...optional('chat', getOptionalStringFlag(flags, 'chat')),
+      ...optional('fromItem', getOptionalStringFlag(flags, 'from-item'))
     })
   },
   'bot item set': async (ctx) => {
@@ -153,6 +154,7 @@ export const BOT_ITEM_HANDLERS: Record<string, CommandHandler> = {
       ...(flags.has('here') ? { here: true } : {}),
       ...optional('chat', getOptionalStringFlag(flags, 'chat')),
       ...optional('link', getOptionalStringFlag(flags, 'link')),
+      ...optional('rootKey', getOptionalStringFlag(flags, 'root-key')),
       ...(limit !== undefined ? { limit } : {}),
       ...optional('cursor', getOptionalStringFlag(flags, 'cursor'))
     })
