@@ -53,6 +53,9 @@ export type BotActingTurn = {
   byAutomation?: true
   /** When the message this turn answers arrived (its row's observedAt). */
   openedAt?: number
+  /** Item mail (the owner's change to an item, or answer on it) the running turn took when nothing
+   *  else opened it, so the rest of this reads the turn before (bot-turn-item-mail.ts). */
+  itemMailIds?: string[]
   /** The event this turn acts on, as the host recorded it: its automation prompt's, or the one the
    *  waking request carries. A request the turn sends carries it on, its text marked as content. */
   origin?: AutomationTriggeredBy
@@ -213,7 +216,7 @@ export function firstMessageActsFor(
 /** Each turn's messages, newest turn first: the one that opened it and those steered into it. A
  *  message still queued belongs to no turn yet. A host that keeps no turn rows gives each its own.
  *  The opener is the chat's own anchor: a turn names a sent message by the provider's id for it. */
-function turnWindows(
+export function turnWindows(
   items: readonly AgentJournalRenderItem[],
   submissions: readonly AgentJournalSubmission[],
   newestTurns: number | null

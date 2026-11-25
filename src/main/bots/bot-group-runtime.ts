@@ -40,6 +40,7 @@ import {
   reserveGroupMailTurn,
   type GroupPeerScope
 } from './bot-group-peer-requests'
+import { groupTurnRequest } from './bot-group-turn-request'
 import type { MessageRow } from '../runtime/orchestration/db/orchestration-records'
 import { groupAnswerTurn, saveGroupPeerAnswer } from './bot-group-peer-answer'
 import { noteGroupTurnMailed } from './bot-group-mention-handoffs'
@@ -185,6 +186,9 @@ export class BotGroupRuntime {
     assertGroupQueuedMessageAllowed(this, sessionId, operationId)
   peerScope = (sessionId: string, targetBotId: string, rootItemId: string | null) =>
     groupPeerScope(this, sessionId, targetBotId, rootItemId)
+  /** The room request a member's turn serves, keyed by the post that started it. */
+  turnRequest = (sessionId: string, turn: Parameters<typeof groupTurnRequest>[2]) =>
+    groupTurnRequest(this, sessionId, turn)
   assertPeerScope = (scope: GroupPeerScope | null | undefined) => {
     if (scope) {
       assertGroupPeerScope(this, scope)

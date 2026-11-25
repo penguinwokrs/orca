@@ -229,13 +229,17 @@ export type BotItemEvent = {
 /** The request an item's turn acted on. `rootKey` is the chain key bot requests record
  *  (`bot_requests.root_key`), so the items one request led to share it across bots. */
 export type BotItemOrigin = {
+  /** `<session>:<item>` for a request a chat's message started; `group:<room>:<post>` for a room's
+   *  owner post, shared by every member's items for it. A turn that continues work (an answer on an
+   *  item, `add --from-item`) keeps that work's key. Opaque: compare, don't parse. */
   rootKey: string
   /** What asked: the owner, a teammate, a group's room, an automation's run, or another bot's request. */
   kind: 'owner' | 'person' | 'group' | 'automation' | 'bot'
   /** When the message the making turn answered arrived (for `bot`, that request), as an ISO UTC
    *  string; null when unknown. */
   at: string | null
-  /** The person's message the chain started from, its first 500 characters; null when not recorded. */
+  /** The person's message the chain started from (a room's owner post), its first 500 characters;
+   *  null when not recorded or not a person's (an item change or a worker's report in a room). */
   request: string | null
 }
 

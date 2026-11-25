@@ -5,6 +5,7 @@
 import { randomUUID } from 'node:crypto'
 import type { BotItemsAddParams } from '../../../../shared/rpc-contract/bots-items-params'
 import { BotItemError } from '../../../bots/bot-item-error'
+import type { BotItemsRemote } from '../../../bots/bot-items-ops'
 import type { BotItemOrigin } from '../../../../shared/bots/bot-items'
 import { botItemRequestMail } from '../../../bots/bot-items-mail-text'
 import { assertBotItemAddable, uniqueBotItemLinks } from '../../../bots/bot-items-input'
@@ -12,6 +13,10 @@ import { sessionCallerOf } from '../../orchestration/addressing/orchestration-ca
 import type { RpcContext } from '../core'
 import { readBotTurn } from './orchestration/messaging/bot-recipient'
 import { botTurnRequestOrigin } from './orchestration/messaging/bot-request-chain'
+import {
+  addedItemOrigin,
+  readContinuedRequest
+} from './orchestration/messaging/bot-continued-request'
 import { botChatAddress } from './orchestration/messaging/bot-chat-address'
 import { sendToBot } from './orchestration/messaging/bot-request-send'
 import {
@@ -32,7 +37,11 @@ export async function addItem(
   const store = runtime.botItems.store()
   const links = uniqueBotItemLinks((params.links ?? []).map(parseItemLink))
   const from = params.fromItem !== undefined ? await resolveItem(store, params.fromItem) : null
-  const origin = await requestOrigin(context, writer.sessionId)
+  const [turnOrigin, fromOrigin] = await Promise.all([
+    requestOrigin(context, writer.sessionId),
+    from ? itemOrigin(store, from.uid) : null
+  ])
+  const origin = addedItemOrigin(turnOrigin, fromOrigin)
   const target = params.forBot
     ? botNamed(params.forBot, writer.bot, runtime.bots.list())
     : writer.bot
@@ -69,14 +78,18 @@ export async function addItem(
     ...botItemRequestMail({ uid, ...fields, doneMeans: params.doneMeans ?? null })
   })
   // The key its request mail recorded, which the receiving bot's own items and requests carry on.
-  const sentRootKey = runtime.getOrchestrationDb().getBotRequest(messageId)?.root_key
+  const sentOrigin = addedItemOrigin(
+    turnOrigin,
+    fromOrigin,
+    runtime.getOrchestrationDb().getBotRequest(messageId)?.root_key
+  )
   try {
     const chatId = runtime.botItems.chatRootOf(sent.landed)
     const title = runtime.botItems.chatTitleOf(chatId)
     const outcome = await store.add(
       {
         ...fields,
-        ...(origin ? { origin: sentRootKey ? { ...origin, rootKey: sentRootKey } : origin } : {}),
+        ...(sentOrigin ? { origin: sentOrigin } : {}),
         uid,
         ownerBotId: target.id,
         chatId,
@@ -105,9 +118,23 @@ async function requestOrigin(
   try {
     const db = context.runtime.getOrchestrationDb()
     const { turn } = await readBotTurn(context.runtime, db, sessionId)
-    return botTurnRequestOrigin(db, sessionId, turn)
+    const continues = await readContinuedRequest(context.runtime, db, sessionId, turn)
+    return botTurnRequestOrigin(db, sessionId, turn, continues)
   } catch (error) {
     console.warn('[bots] could not read the request an item came from', error)
+    return null
+  }
+}
+
+/** The request an item was made for; none for one made before Orca recorded it. */
+async function itemOrigin(
+  store: Pick<BotItemsRemote, 'viewRows'>,
+  uid: string
+): Promise<BotItemOrigin | null> {
+  try {
+    return (await store.viewRows([uid])).origins[uid] ?? null
+  } catch (error) {
+    console.warn('[bots] could not read the request an item was made for', error)
     return null
   }
 }

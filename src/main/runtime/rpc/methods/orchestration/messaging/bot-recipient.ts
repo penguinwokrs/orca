@@ -22,6 +22,8 @@ import type {
   BotRequestAsker
 } from '../../../../../../shared/bots/bot-acts-for'
 import { botRequestActsFor, botRequestRecord } from './bot-request-record'
+import { readContinuedRequest } from './bot-continued-request'
+import type { BotTurnContinues } from './bot-request-chain'
 import type {
   AgentJournalMessageItem,
   AgentJournalRenderItem
@@ -143,6 +145,8 @@ export type ActingSender = {
   triggeredBy?: AutomationTriggeredBy | null
   /** A bot's worker's Dispatch: it acts for its conversation's record, not another asker's newer turn. */
   worker?: string
+  /** The earlier request a bot's turn continues, whose key its requests keep (bot-continued-request.ts). */
+  continues?: BotTurnContinues | null
 }
 
 const OWNER_TURN: BotActingTurn = {
@@ -261,7 +265,8 @@ export async function readActingSender(
         bot,
         turn: read.turn,
         conversation: read.conversation,
-        triggeredBy: read.triggeredBy
+        triggeredBy: read.triggeredBy,
+        continues: await readContinuedRequest(runtime, db, callerSessionId, read.turn)
       }
     : {
         sessionId: callerSessionId,
