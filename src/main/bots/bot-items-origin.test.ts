@@ -7,7 +7,7 @@ const BOT: BotItemBotActor = { kind: 'bot', botId: 'bot', chatId: 'home' }
 const ORIGIN: BotItemOrigin = {
   rootKey: 'orca_session_id:home:item-1',
   kind: 'owner',
-  at: 1000,
+  at: '2026-11-25T00:00:00.000Z',
   request: 'Build a board'
 }
 

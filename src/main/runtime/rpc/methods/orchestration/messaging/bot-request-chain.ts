@@ -1,12 +1,13 @@
 // Where a new bot request sits in its chain, kept on its record for tracing: a turn a request woke
 // continues that request's chain.
 import { createHash } from 'node:crypto'
-import type { BotActingTurn } from '../../../../../bots/bot-request-asker'
+import { MAX_REQUEST_TEXT, type BotActingTurn } from '../../../../../bots/bot-request-asker'
 import type { OrchestrationDb } from '../../../../orchestration/db/orchestration-db'
 import type { BotItemOrigin } from '../../../../../../shared/bots/bot-items'
 import { actsForOwner } from '../../../../../../shared/bots/bot-acts-for'
 import { isBotGroupMemberSession } from '../../../../../../shared/bots/bot-group'
 import { botRequestRecord } from './bot-request-record'
+import { sliceAtGraphemeLimit } from '../../../../../../shared/text/surrogate-safe-text-slice'
 
 export type BotRequestChain = {
   /** The new request's hop: 1 from a person's turn, one past the deepest request that woke the turn. */
@@ -50,6 +51,11 @@ export function botTurnRequestOrigin(
     return null
   }
   const fromBot = turn.requestIds.length > 0
+  // Only a chain's first request carries the person's words; deeper hops record none.
+  const request =
+    turn.request ??
+    turn.requestIds.map((id) => botRequestRecord(db, id)?.request).find((text) => text) ??
+    null
   return {
     rootKey,
     kind: fromBot
@@ -61,12 +67,12 @@ export function botTurnRequestOrigin(
           : actsForOwner(turn.askedBy)
             ? 'owner'
             : 'person',
-    at: turn.openedAt ?? null,
-    // Only a chain's first request carries the person's words; deeper hops record none.
-    request:
-      turn.request ??
-      turn.requestIds.map((id) => botRequestRecord(db, id)?.request).find((text) => text) ??
-      null
+    at:
+      turn.openedAt !== undefined && Number.isFinite(turn.openedAt)
+        ? new Date(turn.openedAt).toISOString()
+        : null,
+    // A group's request keeps the room's whole instruction.
+    request: request === null ? null : sliceAtGraphemeLimit(request, MAX_REQUEST_TEXT)
   }
 }
 

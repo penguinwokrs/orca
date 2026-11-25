@@ -1,5 +1,17 @@
 import { describe, expect, it } from 'vitest'
-import { clipAtWord } from './surrogate-safe-text-slice'
+import { clipAtWord, sliceAtGraphemeLimit } from './surrogate-safe-text-slice'
+
+describe('sliceAtGraphemeLimit', () => {
+  it('ends on a whole character, within the limit', () => {
+    const family = '\u{1F468}\u200D\u{1F469}\u200D\u{1F467}'
+    const accented = 'e\u0301'
+    expect(sliceAtGraphemeLimit(`ab${family}cd`, 5)).toBe('ab')
+    expect(sliceAtGraphemeLimit(`ab${accented}cd`, 3)).toBe('ab')
+    expect(sliceAtGraphemeLimit('abc\u{1F600}x', 4)).toBe('abc')
+    expect(sliceAtGraphemeLimit(`ab${accented}cd`, 4)).toBe(`ab${accented}`)
+    expect(sliceAtGraphemeLimit('short', 500)).toBe('short')
+  })
+})
 
 describe('clipAtWord', () => {
   it('keeps text that fits, on one line', () => {

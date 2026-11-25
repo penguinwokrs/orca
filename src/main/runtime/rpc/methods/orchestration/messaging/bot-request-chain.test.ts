@@ -67,7 +67,7 @@ it("records the chain key a send from the same turn records, across a bot's hand
   expect(botTurnRequestOrigin(db, HOME, owner)).toEqual({
     rootKey: 'orca_session_id:home:item-1',
     kind: 'owner',
-    at: 1000,
+    at: '1970-01-01T00:00:01.000Z',
     request: 'Build a board'
   })
   // The helper's turn, woken by the coordinator's handoff, keeps the owner's request and its key.
@@ -81,7 +81,7 @@ it("records the chain key a send from the same turn records, across a bot's hand
   expect(botTurnRequestOrigin(db, HELPER, woken)).toEqual({
     rootKey: 'orca_session_id:home:item-1',
     kind: 'bot',
-    at: 2000,
+    at: '1970-01-01T00:00:02.000Z',
     request: 'Build a board'
   })
   expect(botTurnRequestOrigin(db, HELPER, woken)?.rootKey).toBe(

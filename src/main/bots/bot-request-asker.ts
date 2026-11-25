@@ -16,6 +16,7 @@ import {
   type AutomationTriggeredBy,
   type BotRequestAsker
 } from '../../shared/bots/bot-acts-for'
+import { sliceAtGraphemeLimit } from '../../shared/text/surrogate-safe-text-slice'
 
 /** The conversation a request came in, as Orca Cloud names it. */
 export type BotRequestConversation = { source: ConnectorSource; externalId: string }
@@ -78,7 +79,7 @@ export type BotRequestActsFor = {
   origin?: AutomationTriggeredBy
 }
 
-const MAX_REQUEST_TEXT = 500
+export const MAX_REQUEST_TEXT = 500
 
 function isRootUserMessage(item: AgentJournalRenderItem): boolean {
   return (
@@ -97,7 +98,7 @@ function textOf(body: AgentJournalItemBody): string | null {
     .flatMap((block) => (block.type === 'text' ? [block.text] : []))
     .join('\n')
     .trim()
-  return text ? text.slice(0, MAX_REQUEST_TEXT) : null
+  return text ? sliceAtGraphemeLimit(text, MAX_REQUEST_TEXT) : null
 }
 
 type ItemReading =
