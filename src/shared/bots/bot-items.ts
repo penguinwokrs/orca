@@ -232,8 +232,9 @@ export type BotItemOrigin = {
   rootKey: string
   /** What asked: the owner, a teammate, a group's room, an automation's run, or another bot's request. */
   kind: 'owner' | 'person' | 'group' | 'automation' | 'bot'
-  /** When the message the making turn answered arrived (for `bot`, that request); null when unknown. */
-  at: number | null
+  /** When the message the making turn answered arrived (for `bot`, that request), as an ISO UTC
+   *  string; null when unknown. */
+  at: string | null
   /** The person's message the chain started from, its first 500 characters; null when not recorded. */
   request: string | null
 }

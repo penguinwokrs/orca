@@ -159,7 +159,7 @@ export function originOf(value: unknown): BotItemOrigin | null {
   return {
     rootKey,
     kind,
-    at: typeof origin.at === 'number' ? origin.at : null,
+    at: str(origin.at),
     request: str(origin.request)
   }
 }

@@ -9,6 +9,24 @@ export function sliceAtCodeUnitLimit(value: string, limit: number): string {
   return value.slice(0, end)
 }
 
+const graphemes = new Intl.Segmenter('en', { granularity: 'grapheme' })
+
+/** Cut to `limit` UTF-16 code units or fewer, ending on a whole character: never inside a surrogate
+ *  pair or a combining sequence (an accent, a ZWJ emoji, a flag). */
+export function sliceAtGraphemeLimit(value: string, limit: number): string {
+  if (value.length <= limit) {
+    return value
+  }
+  let end = 0
+  for (const { index, segment } of graphemes.segment(value)) {
+    if (index + segment.length > limit) {
+      break
+    }
+    end = index + segment.length
+  }
+  return value.slice(0, end)
+}
+
 function isHighSurrogate(code: number): boolean {
   return code >= 0xd800 && code <= 0xdbff
 }

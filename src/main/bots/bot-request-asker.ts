@@ -17,6 +17,7 @@ import {
 import { originOf, requestsOriginPlace } from './bot-request-origin-place'
 import { carriedAskersOf, stampedPerson } from './bot-stamped-askers'
 import { typedInOrcaByOwner } from './bot-typed-in-orca'
+import { sliceAtGraphemeLimit } from '../../shared/text/surrogate-safe-text-slice'
 import { isRootTurnRecord, isRootUserMessage, turnMessages } from './bot-turn-messages'
 
 /** The conversation a request came in, as Orca Cloud names it. */
@@ -94,7 +95,7 @@ export type BotRequestActsFor = {
   wantsNothing?: true
 }
 
-const MAX_REQUEST_TEXT = 500
+export const MAX_REQUEST_TEXT = 500
 
 function textOf(body: AgentJournalItemBody): string | null {
   if (body.kind !== 'message') {
@@ -104,7 +105,7 @@ function textOf(body: AgentJournalItemBody): string | null {
     .flatMap((block) => (block.type === 'text' ? [block.text] : []))
     .join('\n')
     .trim()
-  return text ? text.slice(0, MAX_REQUEST_TEXT) : null
+  return text ? sliceAtGraphemeLimit(text, MAX_REQUEST_TEXT) : null
 }
 
 type ItemReading =
