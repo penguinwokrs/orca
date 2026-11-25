@@ -9,7 +9,8 @@ export function sliceAtCodeUnitLimit(value: string, limit: number): string {
   return value.slice(0, end)
 }
 
-const graphemes = new Intl.Segmenter('en', { granularity: 'grapheme' })
+// Made on first use: importers on engines without Intl.Segmenter never build one.
+let graphemes: Intl.Segmenter | undefined
 
 /** Cut to `limit` UTF-16 code units or fewer, ending on a whole character: never inside a surrogate
  *  pair or a combining sequence (an accent, a ZWJ emoji, a flag). */
@@ -18,6 +19,7 @@ export function sliceAtGraphemeLimit(value: string, limit: number): string {
     return value
   }
   let end = 0
+  graphemes ??= new Intl.Segmenter('en', { granularity: 'grapheme' })
   for (const { index, segment } of graphemes.segment(value)) {
     if (index + segment.length > limit) {
       break
