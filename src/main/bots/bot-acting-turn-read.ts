@@ -5,6 +5,7 @@ import {
   type BotActingTurn,
   type BotActingTurnLookups
 } from './bot-request-asker'
+import { withNewestItemMail } from './bot-turn-item-mail'
 
 /** The acting turn from the newest turns back, widening the read until one decides it or the read
  *  holds the whole chat: a turn woken only by a worker's report reads the one before it. `before`:
@@ -46,7 +47,7 @@ export async function readNewestBotActingTurn(
       complete || !widen ? null : newestTurns
     )
     if (turn) {
-      return turn
+      return withNewestItemMail(turn, items, snapshot.submissions)
     }
   }
 }

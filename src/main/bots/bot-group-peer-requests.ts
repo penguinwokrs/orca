@@ -8,9 +8,9 @@ import { startsBotGroupRequest, type BotGroupPeerScope } from '../../shared/bots
 import type { MessageRow } from '../runtime/orchestration/db/orchestration-records'
 import type { StructuredMailboxPointerHost } from '../runtime/orchestration/mailbox/structured-pointer/structured-mailbox-pointer-host-contract'
 import { getStructuredAgentSessionHost } from '../native-chat/agent-session-wire/host/structured-agent-session-registry'
-import { requireStructuredHost } from './bot-chat-session'
 import type { BotGroupRuntime } from './bot-group-runtime'
-import { mailRoot, mailTurnRan, ownRequestMail, rootOf } from './bot-group-mail-root'
+import { mailRoot, mailTurnRan, ownRequestMail } from './bot-group-mail-root'
+import { groupTurnLine, turnOperation } from './bot-group-turn-request'
 
 export type GroupPeerScope = NonNullable<Awaited<ReturnType<typeof groupPeerScope>>>
 
@@ -39,15 +39,13 @@ export async function groupPeerScope(
   if (!target) {
     throw new Error('Group peer requests must address a current member of this group.')
   }
-  const submission = await (
-    await (await requireStructuredHost(groups.runtime)).journalReads(sessionId)
-  ).acceptedSendOfRow(rootItemId)
-  const operationId = submission?.queuedMessageId ?? submission?.clientMessageId
-  const message = operationId ? groups.store.operationMessage(operationId) : null
-  const turn = message?.turns.find(
-    (turn) => turn.operationId === operationId && turn.sessionId === sessionId
+  const line = groupTurnLine(
+    groups.store,
+    sessionId,
+    await turnOperation(groups, sessionId, rootItemId)
   )
-  const root = message ? rootOf(message) : null
+  const root = line?.root ?? null
+  const turn = line?.turn
   if (!root || !turn || !activeAt(group, sessionId, root.rootSequence)) {
     throw new Error('The original group request is stopped or cannot be verified.')
   }

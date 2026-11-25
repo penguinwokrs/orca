@@ -18,11 +18,22 @@ export type BotRequestChain = {
   turnKey: string | null
 }
 
-/** Read from Orca's records of the waking requests, never from the sender's text. */
+/** The request a turn continues instead of starting one: a room's post, or the one the items its
+ *  item mail names were made for (bot-continued-request.ts). `kind` and `request` go with the key,
+ *  so one key keeps one title; `kind` absent reads the turn's own. */
+export type BotTurnContinues = {
+  rootKey: string
+  request: string | null
+  kind?: BotItemOrigin['kind']
+}
+
+/** Read from Orca's records of the waking requests, never from the sender's text. A turn that
+ *  continues a request keeps that request's key. */
 export function botRequestChain(
   db: OrchestrationDb,
   sessionId: string | null,
-  turn: Pick<BotActingTurn, 'rootItemId' | 'requestIds'>
+  turn: Pick<BotActingTurn, 'rootItemId' | 'requestIds'>,
+  continues?: Pick<BotTurnContinues, 'rootKey'> | null
 ): BotRequestChain {
   const turnKey = sessionId && turn.rootItemId ? `${sessionId}:${turn.rootItemId}` : null
   const parents = turn.requestIds.flatMap((id) => {
@@ -30,11 +41,11 @@ export function botRequestChain(
     return row ? [row] : []
   })
   if (parents.length === 0) {
-    return { depth: 1, rootKey: turnKey, turnKey }
+    return { depth: 1, rootKey: continues?.rootKey ?? turnKey, turnKey }
   }
   return {
     depth: Math.max(...parents.map((row) => row.depth)) + 1,
-    rootKey: parents[0].root_key,
+    rootKey: continues?.rootKey ?? parents[0].root_key,
     turnKey
   }
 }
@@ -44,36 +55,41 @@ export function botRequestChain(
 export function botTurnRequestOrigin(
   db: OrchestrationDb,
   sessionId: string,
-  turn: BotActingTurn
+  turn: BotActingTurn,
+  continues?: BotTurnContinues | null
 ): BotItemOrigin | null {
-  const { rootKey } = botRequestChain(db, sessionId, turn)
+  const { rootKey } = botRequestChain(db, sessionId, turn, continues)
   if (!rootKey) {
     return null
   }
-  const fromBot = turn.requestIds.length > 0
   // Only a chain's first request carries the person's words; deeper hops record none.
-  const request =
-    turn.request ??
-    turn.requestIds.map((id) => botRequestRecord(db, id)?.request).find((text) => text) ??
-    null
+  const request = continues
+    ? continues.request
+    : (turn.request ??
+      turn.requestIds.map((id) => botRequestRecord(db, id)?.request).find((text) => text) ??
+      null)
   return {
     rootKey,
-    kind: fromBot
-      ? 'bot'
-      : turn.byAutomation
-        ? 'automation'
-        : isBotGroupMemberSession(sessionId)
-          ? 'group'
-          : actsForOwner(turn.askedBy)
-            ? 'owner'
-            : 'person',
+    kind: continues?.kind ?? turnKind(sessionId, turn),
     at:
       turn.openedAt !== undefined && Number.isFinite(turn.openedAt)
         ? new Date(turn.openedAt).toISOString()
         : null,
-    // A group's request keeps the room's whole instruction.
     request: request === null ? null : sliceAtGraphemeLimit(request, MAX_REQUEST_TEXT)
   }
+}
+
+function turnKind(sessionId: string, turn: BotActingTurn): BotItemOrigin['kind'] {
+  if (turn.requestIds.length > 0) {
+    return 'bot'
+  }
+  if (turn.byAutomation) {
+    return 'automation'
+  }
+  if (isBotGroupMemberSession(sessionId)) {
+    return 'group'
+  }
+  return actsForOwner(turn.askedBy) ? 'owner' : 'person'
 }
 
 /** One send: from this turn, to this bot, of this kind, with this text. */

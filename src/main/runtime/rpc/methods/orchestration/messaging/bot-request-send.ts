@@ -152,7 +152,7 @@ async function admitBotRequestMail(
   asked: Pick<BotRequestRecord, 'askedInConversation'>
 ): Promise<unknown> {
   const { runtime, db, params, receiving, acting } = args
-  const chain = botRequestChain(db, acting.sessionId, acting.turn)
+  const chain = botRequestChain(db, acting.sessionId, acting.turn, acting.continues)
   /** Checked now and again just before storing, after every wait, against the bot as it is then. */
   const check = () => {
     const bot = runtime.bots.list().find((entry) => entry.id === receiving.bot.id)
