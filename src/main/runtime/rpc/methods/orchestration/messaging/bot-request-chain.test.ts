@@ -1,5 +1,6 @@
 import { afterEach, beforeEach, expect, it } from 'vitest'
-import type { BotActingTurn } from '../../../../../bots/bot-request-asker'
+import { readBotActingTurn, type BotActingTurn } from '../../../../../bots/bot-request-asker'
+import type { AgentJournalRenderItem } from '../../../../../../shared/agent-session/journal/agent-session-journal-types'
 import type { BotRequestRecord } from '../../../../../bots/bot-request-view'
 import { OrchestrationDb } from '../../../../orchestration/db/orchestration-db'
 import { testOrcaSessionId } from '../../../../../../shared/agent-session/identity/orca-session-address-test-fixture'
@@ -89,4 +90,42 @@ it("records the chain key a send from the same turn records, across a bot's hand
   )
   // A chat no message has opened a turn in names no request.
   expect(botTurnRequestOrigin(db, HOME, turn({}))).toBeNull()
+})
+
+it("reads an automation run's prompt from the journal as its turn's request", () => {
+  // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: rows with only the fields the reader reads.
+  const items = [
+    {
+      itemId: 'u1',
+      revision: 1,
+      sequence: 1,
+      observedAt: Date.UTC(2026, 10, 25, 9),
+      body: {
+        kind: 'message',
+        role: 'user',
+        blocks: [{ type: 'text', text: 'Post the daily digest' }],
+        origin: 'automation-run',
+        automationRun: { automationId: 'a1', runId: 'r1', name: 'Daily digest' }
+      }
+    },
+    {
+      itemId: 't1',
+      revision: 1,
+      sequence: 2,
+      observedAt: Date.UTC(2026, 10, 25, 9),
+      body: { kind: 'turn', turnId: 'p1', state: 'running', userItemId: 'u1' }
+    }
+  ] as AgentJournalRenderItem[]
+  const read = readBotActingTurn(items, {
+    isBotRequest: () => false,
+    botRequestActsFor: () => null,
+    conversationActsFor: [{ kind: 'owner' }],
+    conversationWorkspaceId: null
+  })
+  expect(botTurnRequestOrigin(db, HOME, read)).toEqual({
+    rootKey: 'orca_session_id:home:u1',
+    kind: 'automation',
+    at: '2026-11-25T09:00:00.000Z',
+    request: 'Post the daily digest'
+  })
 })

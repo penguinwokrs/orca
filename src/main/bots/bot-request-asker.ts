@@ -341,9 +341,7 @@ export function readBotActingTurnWithin(
         ...(opener.reading.kind === 'conversation' && opener.reading.triggeredBy
           ? { triggeredBy: opener.reading.triggeredBy }
           : {}),
-        ...(opener.item.body.kind === 'message' && opener.item.body.memorySource
-          ? { byAutomation: true as const }
-          : {}),
+        ...(ran || origin ? { byAutomation: true as const } : {}),
         openedAt: opener.item.observedAt,
         ...(origin ? { origin } : {})
       }
