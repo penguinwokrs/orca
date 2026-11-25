@@ -56,6 +56,10 @@ export type BotActingTurn = {
   typedByOwner?: true
   /** Who did the event behind the automation prompt that opened the turn, for the record only. */
   triggeredBy?: AutomationTriggeredBy
+  /** An automation's run or event prompt opened the turn. */
+  byAutomation?: true
+  /** When the message this turn answers arrived (its row's observedAt). */
+  openedAt?: number
   /** The event this turn acts on, as the host recorded it: its automation prompt's, or the one the
    *  waking request carries. A request the turn sends carries it on, its text marked as content. */
   origin?: AutomationTriggeredBy
@@ -293,6 +297,7 @@ export function readBotActingTurnWithin(
         actingOnRequestId: requestIds[0] ?? null,
         requestIds,
         wokenAt: null,
+        openedAt: first.item.observedAt,
         ...(origin ? { origin } : {}),
         ...(originPlace ? { originPlace } : {})
       }
@@ -350,6 +355,10 @@ export function readBotActingTurnWithin(
         ...(opener.reading.kind === 'conversation' && opener.reading.triggeredBy
           ? { triggeredBy: opener.reading.triggeredBy }
           : {}),
+        ...(opener.item.body.kind === 'message' && opener.item.body.memorySource
+          ? { byAutomation: true as const }
+          : {}),
+        openedAt: opener.item.observedAt,
         ...(origin ? { origin } : {})
       }
     }

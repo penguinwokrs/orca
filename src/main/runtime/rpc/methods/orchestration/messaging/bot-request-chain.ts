@@ -3,6 +3,10 @@
 import { createHash } from 'node:crypto'
 import type { BotActingTurn } from '../../../../../bots/bot-request-asker'
 import type { OrchestrationDb } from '../../../../orchestration/db/orchestration-db'
+import type { BotItemOrigin } from '../../../../../../shared/bots/bot-items'
+import { actsForOwner } from '../../../../../../shared/bots/bot-acts-for'
+import { isBotGroupMemberSession } from '../../../../../../shared/bots/bot-group'
+import { botRequestRecord } from './bot-request-record'
 
 export type BotRequestChain = {
   /** The new request's hop: 1 from a person's turn, one past the deepest request that woke the turn. */
@@ -31,6 +35,38 @@ export function botRequestChain(
     depth: Math.max(...parents.map((row) => row.depth)) + 1,
     rootKey: parents[0].root_key,
     turnKey
+  }
+}
+
+/** The request a turn acts on, as an item made in it records it: the chain key a send from the same
+ *  turn records, so a request's items and the requests it led to share it. Null when no turn names one. */
+export function botTurnRequestOrigin(
+  db: OrchestrationDb,
+  sessionId: string,
+  turn: BotActingTurn
+): BotItemOrigin | null {
+  const { rootKey } = botRequestChain(db, sessionId, turn)
+  if (!rootKey) {
+    return null
+  }
+  const fromBot = turn.requestIds.length > 0
+  return {
+    rootKey,
+    kind: fromBot
+      ? 'bot'
+      : turn.byAutomation
+        ? 'automation'
+        : isBotGroupMemberSession(sessionId)
+          ? 'group'
+          : actsForOwner(turn.askedBy)
+            ? 'owner'
+            : 'person',
+    at: turn.openedAt ?? null,
+    // Only a chain's first request carries the person's words; deeper hops record none.
+    request:
+      turn.request ??
+      turn.requestIds.map((id) => botRequestRecord(db, id)?.request).find((text) => text) ??
+      null
   }
 }
 

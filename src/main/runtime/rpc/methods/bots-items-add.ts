@@ -5,7 +5,7 @@
 import { randomUUID } from 'node:crypto'
 import type { BotItemsAddParams } from '../../../../shared/rpc-contract/bots-items-params'
 import { BotItemError } from '../../../bots/bot-item-error'
-import { BOT_ITEM_LIMITS } from '../../../../shared/bots/bot-items'
+import { BOT_ITEM_LIMITS, type BotItemOrigin } from '../../../../shared/bots/bot-items'
 import { botItemRequestMail } from '../../../bots/bot-items-mail-text'
 import {
   assertBotItemAddable,
@@ -15,11 +15,14 @@ import {
 import { sessionCallerOf } from '../../orchestration/addressing/orchestration-caller-identity'
 import type { RpcContext } from '../core'
 import { readBotTurnOrigin } from './orchestration/messaging/bot-turn-origin'
+import { readBotTurn } from './orchestration/messaging/bot-recipient'
+import { botTurnRequestOrigin } from './orchestration/messaging/bot-request-chain'
 import { botChatAddress } from './orchestration/messaging/bot-chat-address'
 import { sendToBot } from './orchestration/messaging/bot-request-send'
 import {
   botNamed,
   parseItemLink,
+  resolveItem,
   writeResult,
   writerOf,
   type BotItemWriteResult
@@ -33,7 +36,11 @@ export async function addItem(
   const writer = writerOf(params, context)
   const store = runtime.botItems.store()
   const typed = (params.links ?? []).map(parseItemLink)
-  const startedIn = await originUrl(context, writer.sessionId)
+  const from = params.fromItem !== undefined ? await resolveItem(store, params.fromItem) : null
+  const [startedIn, origin] = await Promise.all([
+    originUrl(context, writer.sessionId),
+    requestOrigin(context, writer.sessionId)
+  ])
   const links = uniqueBotItemLinks(startedIn ? withOrigin(typed, startedIn) : typed)
   const target = params.forBot
     ? botNamed(params.forBot, writer.bot, runtime.bots.list())
@@ -44,31 +51,42 @@ export async function addItem(
     ...(params.doneMeans !== undefined ? { doneMeans: params.doneMeans } : {}),
     status: params.status ?? 'planned',
     links,
-    ...(startedIn ? { startedIn } : {})
+    ...(startedIn ? { startedIn } : {}),
+    ...(from ? { fromItem: { uid: from.uid, number: from.number } } : {})
   }
   if (target.id === writer.bot.id && params.chat === undefined) {
     const outcome = await store.add(
-      { ...fields, ownerBotId: writer.bot.id, chatId: writer.actor.chatId, source: writer.source },
+      {
+        ...fields,
+        ...(origin ? { origin } : {}),
+        ownerBotId: writer.bot.id,
+        chatId: writer.actor.chatId,
+        source: writer.source
+      },
       writer.actor
     )
     return writeResult(context, outcome, writer)
   }
   assertBotItemAddable(fields)
   const uid = randomUUID()
+  const messageId = `msg_item_${uid.replaceAll('-', '')}`
   const sent = await sendItemRequest(context, {
     type: 'handoff',
     to: params.chat
       ? await botChatAddress(runtime, `bot:${target.name}`, params.chat)
       : `bot:${target.name}`,
-    messageId: `msg_item_${uid.replaceAll('-', '')}`,
+    messageId,
     ...botItemRequestMail({ uid, ...fields, doneMeans: params.doneMeans ?? null })
   })
+  // The key its request mail recorded, which the receiving bot's own items and requests carry on.
+  const sentRootKey = runtime.getOrchestrationDb().getBotRequest(messageId)?.root_key
   try {
     const chatId = runtime.botItems.chatRootOf(sent.landed)
     const title = runtime.botItems.chatTitleOf(chatId)
     const outcome = await store.add(
       {
         ...fields,
+        ...(origin ? { origin: sentRootKey ? { ...origin, rootKey: sentRootKey } : origin } : {}),
         uid,
         ownerBotId: target.id,
         chatId,
@@ -103,6 +121,22 @@ async function originUrl(context: RpcContext, sessionId: string): Promise<string
     if (!(error instanceof Error && error.name === 'JournalWindowNotIndexed')) {
       console.warn('[bots] could not read where an item started', error)
     }
+    return null
+  }
+}
+
+/** The request the calling turn acts on, read as a bot send from it reads it, so the item shares
+ *  that send's chain key; none when the turn can't be read, which never stops the add. */
+async function requestOrigin(
+  context: RpcContext,
+  sessionId: string
+): Promise<BotItemOrigin | null> {
+  try {
+    const db = context.runtime.getOrchestrationDb()
+    const { turn } = await readBotTurn(context.runtime, db, sessionId)
+    return botTurnRequestOrigin(db, sessionId, turn)
+  } catch (error) {
+    console.warn('[bots] could not read the request an item came from', error)
     return null
   }
 }

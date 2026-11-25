@@ -226,6 +226,18 @@ export type BotItemEvent = {
   at: number
 }
 
+/** The request an item's turn acted on. `rootKey` is the chain key bot requests record
+ *  (`bot_requests.root_key`), so the items one request led to share it across bots. */
+export type BotItemOrigin = {
+  rootKey: string
+  /** What asked: the owner, a teammate, a group's room, an automation's run, or another bot's request. */
+  kind: 'owner' | 'person' | 'group' | 'automation' | 'bot'
+  /** When the message the making turn answered arrived (for `bot`, that request); null when unknown. */
+  at: number | null
+  /** The person's message the chain started from, its first 500 characters; null when not recorded. */
+  request: string | null
+}
+
 export type BotItem = {
   uid: string
   number: number
@@ -237,6 +249,10 @@ export type BotItem = {
   /** `gone`: the host read its chats and this one's record is deleted, so its comments take no attachments. */
   chat: { id: string; kind: BotItemChatKind; title: string | null; gone?: true }
   madeBy: { botId: string; name: string | null; chatId: string } | null
+  /** Kept on its `made` event; null for items made before Orca recorded it, absent from older hosts. */
+  origin?: BotItemOrigin | null
+  /** The item whose work this one was made in (`add --from-item`); null when none was named. */
+  fromItem?: { uid: string; number: number } | null
   /** Needs you: the agent's comment asking the owner. `gist`: its body's first line; `decisions`: its
    *  question lines (`--ask`) and their quick replies (`--option`). */
   question: { eventId: string; text: string; gist?: string; decisions?: BotItemDecision[] } | null
